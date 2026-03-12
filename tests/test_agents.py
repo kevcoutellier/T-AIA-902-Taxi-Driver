@@ -87,3 +87,59 @@ class TestQLearningAgent:
         assert "alpha" in params
         assert "gamma" in params
         assert "epsilon" in params
+
+
+from agents.sarsa import SARSAAgent
+
+
+class TestSARSAAgent:
+    def test_name(self):
+        agent = SARSAAgent()
+        assert agent.name == "SARSA"
+
+    def test_initial_q_table_is_zeros(self):
+        agent = SARSAAgent()
+        assert agent.q_table.shape == (500, 6)
+
+    def test_learn_uses_next_action(self):
+        agent = SARSAAgent(alpha=1.0, gamma=1.0, epsilon=0.0)
+        agent.q_table[1, 2] = 5.0
+        agent.learn(0, 0, 1.0, 1, False)
+        assert agent.q_table[0, 0] == 6.0
+
+    def test_get_params(self):
+        agent = SARSAAgent()
+        params = agent.get_params()
+        assert "alpha" in params
+
+
+from agents.dqn import DQNAgent
+
+
+class TestDQNAgent:
+    def test_name(self):
+        agent = DQNAgent()
+        assert agent.name == "DQN"
+
+    def test_select_action_returns_valid(self):
+        agent = DQNAgent(epsilon=0.0)
+        action = agent.select_action(0)
+        assert 0 <= action <= 5
+
+    def test_learn_stores_transition(self):
+        agent = DQNAgent()
+        agent.learn(0, 1, -1.0, 1, False)
+        assert len(agent.replay_buffer) == 1
+
+    def test_replay_buffer_capacity(self):
+        agent = DQNAgent(buffer_capacity=5)
+        for i in range(10):
+            agent.learn(i % 500, 0, -1.0, (i + 1) % 500, False)
+        assert len(agent.replay_buffer) == 5
+
+    def test_get_params(self):
+        agent = DQNAgent()
+        params = agent.get_params()
+        assert "lr" in params
+        assert "gamma" in params
+        assert "batch_size" in params
