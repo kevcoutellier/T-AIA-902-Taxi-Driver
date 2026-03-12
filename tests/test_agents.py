@@ -51,3 +51,39 @@ class TestBruteForceAgent:
     def test_get_params(self):
         agent = BruteForceAgent()
         assert agent.get_params() == {}
+
+
+from agents.q_learning import QLearningAgent
+
+
+class TestQLearningAgent:
+    def test_name(self):
+        agent = QLearningAgent()
+        assert agent.name == "Q-Learning"
+
+    def test_initial_q_table_is_zeros(self):
+        agent = QLearningAgent()
+        assert agent.q_table.shape == (500, 6)
+        assert np.all(agent.q_table == 0)
+
+    def test_select_action_returns_valid(self):
+        agent = QLearningAgent(epsilon=0.0)
+        action = agent.select_action(0)
+        assert 0 <= action <= 5
+
+    def test_learn_updates_q_table(self):
+        agent = QLearningAgent(alpha=1.0, gamma=0.0, epsilon=0.0)
+        agent.learn(0, 1, 10.0, 1, False)
+        assert agent.q_table[0, 1] == 10.0
+
+    def test_epsilon_decays(self):
+        agent = QLearningAgent(epsilon=1.0, epsilon_decay=0.5, epsilon_min=0.01)
+        agent.learn(0, 0, 0, 0, True)  # done=True triggers decay
+        assert agent.epsilon == 0.5
+
+    def test_get_params(self):
+        agent = QLearningAgent()
+        params = agent.get_params()
+        assert "alpha" in params
+        assert "gamma" in params
+        assert "epsilon" in params
