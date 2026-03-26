@@ -1,6 +1,0 @@
-gymnasium==1.1.1
-numpy>=1.24
-matplotlib>=3.7
-torch>=2.0
-fpdf2>=2.8
-pytest>=7.0
