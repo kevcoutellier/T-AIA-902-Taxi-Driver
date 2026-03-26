@@ -1,11 +1,7 @@
-from agents.bruteforce import BruteForceAgent
-from agents.q_learning import QLearningAgent
-from agents.sarsa import SARSAAgent
-from agents.dqn import DQNAgent
+from .base import BaseAgent
+from .random_agent import RandomAgent
+from .q_learning import QLearningAgent
+from .sarsa import SARSAAgent
+from .dqn import DQNAgent
 
-AGENT_REGISTRY = {
-    "bruteforce": BruteForceAgent,
-    "q_learning": QLearningAgent,
-    "sarsa": SARSAAgent,
-    "dqn": DQNAgent,
-}
+__all__ = ['BaseAgent', 'RandomAgent', 'QLearningAgent', 'SARSAAgent', 'DQNAgent']
