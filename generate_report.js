@@ -128,7 +128,7 @@ const doc = new Document({
   numbering: {
     config: [
       { reference: "bullets",
-        levels: [{ level: 0, format: LevelFormat.BULLET, text: "\u00B7", alignment: AlignmentType.LEFT,
+        levels: [{ level: 0, format: LevelFormat.BULLET, text: "·", alignment: AlignmentType.LEFT,
           style: { paragraph: { indent: { left: 720, hanging: 360 } } } }] },
       { reference: "numbers",
         levels: [{ level: 0, format: LevelFormat.DECIMAL, text: "%1.", alignment: AlignmentType.LEFT,
@@ -165,7 +165,7 @@ const doc = new Document({
         new Paragraph({
           alignment: AlignmentType.CENTER,
           spacing: { after: 200 },
-          children: [new TextRun({ text: "Reinforcement Learning sur Taxi-v3", size: 32, font: "Arial", color: "2E75B6" })]
+          children: [new TextRun({ text: "Analyse approfondie — Monte Carlo First-Visit", size: 32, font: "Arial", color: "2E75B6" })]
         }),
         new Paragraph({
           alignment: AlignmentType.CENTER,
@@ -176,7 +176,7 @@ const doc = new Document({
         new Paragraph({
           alignment: AlignmentType.CENTER,
           spacing: { after: 400 },
-          children: [new TextRun({ text: "Etude comparative d'algorithmes d'apprentissage par renforcement", size: 24, italics: true, font: "Arial", color: "444444" })]
+          children: [new TextRun({ text: "Optimisation des hyperparametres, evaluation sur 8 metriques et comparaison inter-algorithmes sur Taxi-v3", size: 24, italics: true, font: "Arial", color: "444444" })]
         }),
         new Paragraph({ spacing: { before: 2000 } }),
         new Paragraph({
@@ -198,7 +198,7 @@ const doc = new Document({
           children: [new Paragraph({
             alignment: AlignmentType.RIGHT,
             border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: "2E75B6", space: 4 } },
-            children: [new TextRun({ text: "Taxi Driver - Reinforcement Learning", italics: true, size: 18, color: "999999", font: "Arial" })]
+            children: [new TextRun({ text: "Taxi Driver — Monte Carlo First-Visit", italics: true, size: 18, color: "999999", font: "Arial" })]
           })]
         })
       },
@@ -215,24 +215,23 @@ const doc = new Document({
         })
       },
       children: [
-        // ==================== 1. INTRODUCTION ====================
-        heading1("1. Introduction"),
 
-        para("Ce rapport documente la resolution du jeu Taxi-v3 de la librairie Gymnasium par des algorithmes d'apprentissage par renforcement (Reinforcement Learning). L'objectif est de trouver l'algorithme optimal, de justifier chaque choix par des benchmarks rigoureux, et de comparer les performances de differentes approches."),
+        // ==================== 1. CONTEXTE ====================
+        heading1("1. Contexte et environnement"),
+
+        para("Ce rapport analyse l'algorithme Monte Carlo First-Visit applique a la resolution de l'environnement Taxi-v3 de la librairie Gymnasium. L'objectif est de justifier methodiquement les choix d'hyperparametres, d'evaluer les performances sur 8 metriques communes, et de positionner Monte Carlo par rapport aux autres approches du groupe."),
 
         heading2("1.1 L'environnement Taxi-v3"),
+        para("Taxi-v3 simule un taxi dans une grille 5x5. Le taxi doit prendre un passager a un emplacement aleatoire parmi 4 stations (R, G, Y, B) et le deposer a la bonne destination. L'agent doit donc maitriser une sequence de comportements : se deplacer vers le passager, l'embarquer, se deplacer vers la destination, le deposer."),
 
-        para("Taxi-v3 est un environnement de la librairie Gymnasium qui simule un taxi dans une grille 5x5. Le taxi doit prendre un passager a un emplacement aleatoire et le deposer a une destination specifique."),
-
-        heading3("Espace d'etats"),
+        heading3("Espace d'etats et actions"),
         para([
           normal("L'environnement possede "),
-          bold("500 etats distincts"),
-          normal(", calcules comme le produit de : 25 positions du taxi (grille 5x5) x 5 positions du passager (R, G, Y, B, ou dans le taxi) x 4 destinations possibles (R, G, Y, B).")
+          bold("500 etats discrets"),
+          normal(" (25 positions taxi x 5 positions passager x 4 destinations) et "),
+          bold("6 actions"),
+          normal(" : South, North, East, West, Pickup, Dropoff.")
         ]),
-
-        heading3("Actions"),
-        para("L'agent dispose de 6 actions : South (0), North (1), East (2), West (3), Pickup (4), Dropoff (5)."),
 
         heading3("Systeme de recompenses"),
         makeTable(
@@ -240,400 +239,370 @@ const doc = new Document({
           [
             ["Chaque pas effectue", "-1"],
             ["Pickup ou Dropoff illegal", "-10"],
-            ["Dropoff au bon endroit", "+20"],
+            ["Dropoff au bon endroit (succes)", "+20"],
           ],
-          [5000, 4000]
+          [5500, 3500]
         ),
         new Paragraph({ spacing: { after: 200 } }),
-        para("Le systeme penalise chaque action (-1), ce qui pousse l'agent a trouver le chemin le plus court. Un pickup/dropoff mal place coute cher (-10), tandis que le succes est recompense (+20)."),
+        para("La structure de recompenses cree un probleme de credit assignment complexe : le signal positif (+20) est retarde de plusieurs dizaines de pas apres les premieres decisions. Cela pose un defi specifique pour Monte Carlo, comme nous le montrons dans les sections suivantes."),
 
-        // ==================== 2. BASELINE ====================
-        heading1("2. Baseline - Algorithme Brute-Force"),
-
-        para("L'algorithme brute-force constitue notre point de reference. Il choisit des actions completement aleatoires a chaque pas, sans aucun apprentissage. C'est l'equivalent d'un groupe controle en methode scientifique : tout algorithme RL doit faire mieux pour etre considere utile."),
-
-        heading2("2.1 Resultats"),
+        heading2("1.2 Metriques communes du groupe"),
+        para("Afin de permettre des comparaisons objectives entre les algorithmes implementes par chaque membre du groupe, nous evaluons tous nos agents sur les 8 metriques suivantes, calculees sur 100 episodes de test en mode greedy :"),
         makeTable(
-          ["Metrique", "Valeur"],
+          ["#", "Metrique", "Definition"],
           [
-            ["Mean Steps", "196.8"],
-            ["Mean Reward", "-786.5"],
-            ["Ecart-type Steps", "~30"],
-            ["Ecart-type Reward", "~200"],
+            ["1", "Reward moyen", "mean(rewards) sur les episodes de test"],
+            ["2", "Ecart-type reward", "std(rewards) — mesure la stabilite"],
+            ["3", "Steps moyens", "mean(steps) — nombre de pas par episode"],
+            ["4", "Ecart-type steps", "std(steps)"],
+            ["5", "Taux de succes", "mean(reward > 0) x 100 — % d'episodes reussis"],
+            ["6", "Reward / step", "sum(rewards) / sum(steps) — efficacite par action"],
+            ["7", "Actes illegaux", "count(reward == -10) — Pickup/Dropoff mal places"],
+            ["8", "Episode de convergence", "1er episode ou succes >= 25% sur 50 ep. consecutifs"],
           ],
-          [5000, 4000]
-        ),
-        new Paragraph({ spacing: { after: 200 } }),
-        para("Avec pres de 200 pas en moyenne et un reward tres negatif, le brute-force illustre a quel point le probleme est difficile sans apprentissage. Le taxi tourne en rond, tente des pickup/dropoff illegaux, et met un temps considerable a terminer un episode."),
-
-        // ==================== 3. Q-LEARNING ====================
-        heading1("3. Q-Learning - Algorithme principal"),
-
-        heading2("3.1 Principe"),
-        para("Q-Learning est un algorithme off-policy, model-free, base sur le Temporal Difference (TD) learning. Il maintient une Q-table de taille 500 x 6 (etats x actions) initialisee a zero. Chaque cellule Q(s, a) estime le reward total espere si l'on effectue l'action a dans l'etat s, puis que l'on agit de maniere optimale par la suite."),
-
-        heading3("Formule de mise a jour (Bellman)"),
-        para([
-          normal("A chaque pas, la Q-table est mise a jour selon : "),
-          bold("Q(s, a) = Q(s, a) + a x [r + g x max Q(s', a') - Q(s, a)]"),
-        ]),
-        para([
-          normal("Ou "),
-          bold("a (alpha)"),
-          normal(" est le learning rate, "),
-          bold("g (gamma)"),
-          normal(" le discount factor, "),
-          bold("r"),
-          normal(" la recompense immediate, et "),
-          bold("max Q(s', a')"),
-          normal(" la meilleure valeur Q dans l'etat suivant.")
-        ]),
-
-        heading3("Strategie epsilon-greedy"),
-        para("L'agent utilise une strategie epsilon-greedy pour equilibrer exploration et exploitation. Avec une probabilite epsilon, il choisit une action aleatoire (exploration). Sinon, il choisit l'action avec la meilleure valeur Q (exploitation). Epsilon diminue progressivement au cours de l'entrainement (epsilon decay), passant d'une exploration a 100% vers une exploitation quasi-totale."),
-
-        // ---- 3.2 Premier resultat ----
-        heading2("3.2 Premier resultat non optimise"),
-        para([
-          normal("Pour notre premiere tentative, nous utilisons des parametres par defaut : "),
-          bold("alpha=0.1, gamma=0.9, epsilon_decay=0.99"),
-          normal(", avec 5000 episodes d'entrainement.")
-        ]),
-
-        makeTable(
-          ["Metrique", "Brute-Force", "Q-Learning (naif)"],
-          [
-            ["Mean Steps", "196.8", "13.4"],
-            ["Mean Reward", "-786.5", "7.6"],
-            ["Amelioration", "-", "~15x"],
-          ],
-          [3000, 3000, 3000]
+          [400, 2400, 6200]
         ),
         new Paragraph({ spacing: { after: 200 } }),
 
-        para("Meme sans optimisation, Q-Learning est deja 15 fois plus rapide que le brute-force. La courbe d'entrainement ci-dessous montre la convergence :"),
-
-        img("training_naive.png", 6.5, 5),
-        caption("Figure 1 : Courbes d'entrainement Q-Learning non optimise (5000 episodes)"),
-
-        para("On observe que les rewards augmentent et les steps diminuent rapidement au cours des 1500 premiers episodes. L'epsilon diminue avec le decay de 0.99, atteignant son minimum vers l'episode 500."),
-
-        // ---- 3.3 Grid Search ----
-        heading2("3.3 Optimisation par Grid Search"),
-        para("Pour trouver les parametres optimaux, nous appliquons la methode scientifique : faire varier un seul parametre a la fois en fixant les autres, mesurer l'impact sur les performances, et retenir la meilleure valeur avant de passer au parametre suivant."),
-
-        // Alpha
-        heading3("Impact d'alpha (learning rate)"),
-        para("Alpha controle la vitesse d'apprentissage. Un alpha trop bas empeche la convergence ; un alpha trop haut rend l'apprentissage instable."),
-
-        makeTable(
-          ["Alpha", "Mean Steps", "Mean Reward"],
-          [
-            ["0.01", "163.8", "-446.2"],
-            ["0.1", "13.2", "7.8"],
-            ["0.3", "13.0", "8.0"],
-            ["0.5", "12.7", "8.3"],
-            ["0.7", "13.2", "7.8"],
-            ["0.9", "13.0", "8.0"],
-          ],
-          [3000, 3000, 3000],
-          3 // highlight row 3 (alpha=0.5)
-        ),
-        new Paragraph({ spacing: { after: 200 } }),
-
-        img("grid_search_alpha.png", 6.5, 2.5),
-        caption("Figure 2 : Impact d'alpha sur les performances"),
-
-        para([
-          bold("Analyse : "),
-          normal("alpha=0.01 est catastrophique (163.8 steps) car l'agent n'a pas le temps de converger en 5000 episodes. A partir de 0.1, les performances sont stables autour de 13 steps. Le sweet spot est "),
-          bold("alpha=0.5"),
-          normal(" avec 12.7 steps et un reward de 8.3.")
-        ]),
-
-        // Gamma
-        heading3("Impact de gamma (discount factor)"),
-        para("Gamma determine l'importance accordee aux rewards futurs. Un gamma bas rend l'agent myope ; un gamma haut le fait planifier sur le long terme."),
-
-        makeTable(
-          ["Gamma", "Mean Steps", "Mean Reward"],
-          [
-            ["0.5", "12.9", "8.1"],
-            ["0.7", "13.4", "7.6"],
-            ["0.85", "13.1", "7.9"],
-            ["0.95", "12.8", "8.2"],
-            ["0.99", "13.4", "7.6"],
-          ],
-          [3000, 3000, 3000],
-          3 // highlight gamma=0.95
-        ),
-        new Paragraph({ spacing: { after: 200 } }),
-
-        img("grid_search_gamma.png", 6.5, 2.5),
-        caption("Figure 3 : Impact de gamma sur les performances"),
-
-        para([
-          bold("Analyse : "),
-          normal("Les differences sont faibles (12.8 a 13.4 steps), ce qui indique que gamma a peu d'impact sur Taxi-v3 une fois qu'alpha est bien regle. "),
-          bold("Gamma=0.95"),
-          normal(" est marginalement meilleur avec 12.8 steps.")
-        ]),
-
-        // Epsilon decay
-        heading3("Impact d'epsilon_decay"),
-        para("Epsilon decay controle la vitesse de transition de l'exploration vers l'exploitation. Un decay rapide (0.99) fait converger epsilon vite ; un decay lent (0.999) maintient l'exploration plus longtemps."),
-
-        makeTable(
-          ["Epsilon Decay", "Mean Steps", "Mean Reward"],
-          [
-            ["0.990", "13.2", "7.8"],
-            ["0.993", "13.6", "7.4"],
-            ["0.995", "13.5", "7.5"],
-            ["0.997", "13.2", "7.8"],
-            ["0.999", "13.0", "8.0"],
-          ],
-          [3000, 3000, 3000],
-          4 // highlight 0.999
-        ),
-        new Paragraph({ spacing: { after: 200 } }),
-
-        img("grid_search_epsilon_decay.png", 6.5, 2.5),
-        caption("Figure 4 : Impact d'epsilon_decay sur les performances"),
-
-        para([
-          bold("Analyse : "),
-          normal("Un decay lent ("),
-          bold("0.999"),
-          normal(") donne les meilleurs resultats (13.0 steps, reward 8.0). L'exploration prolongee permet a l'agent de mieux remplir sa Q-table avant de passer en mode exploitation.")
-        ]),
-
-        // ---- 3.4 Resultat final ----
-        heading2("3.4 Resultat optimise final"),
-
-        para("En combinant les meilleurs parametres trouves par le grid search :"),
-
-        makeTable(
-          ["Parametre", "Valeur optimale"],
-          [
-            ["Alpha (learning rate)", "0.5"],
-            ["Gamma (discount factor)", "0.95"],
-            ["Epsilon decay", "0.999"],
-            ["Epsilon min", "0.01"],
-            ["Episodes d'entrainement", "5000"],
-          ],
-          [5000, 4000]
-        ),
-        new Paragraph({ spacing: { after: 200 } }),
-
-        para([
-          normal("Resultat : "),
-          bold("Mean steps = 13.1, Mean reward = 7.9"),
-          normal(". L'agent resout le jeu en moyenne en 13 pas, contre 197 pour le brute-force, soit une amelioration de 15x.")
-        ]),
-
-        img("training_optimized.png", 6.5, 5),
-        caption("Figure 5 : Courbes d'entrainement Q-Learning optimise"),
-
-        para("La convergence est atteinte autour de l'episode 1000. On note que le decay plus lent (0.999) maintient l'exploration plus longtemps que dans la version naive, ce qui se traduit par un epsilon qui ne descend a son minimum que vers l'episode 5000."),
-
-        // ==================== 4. MONTE CARLO ====================
+        // ==================== 2. PRINCIPE ====================
         new Paragraph({ children: [new PageBreak()] }),
-        heading1("4. Monte Carlo - Algorithme de comparaison"),
+        heading1("2. Principe de Monte Carlo First-Visit"),
 
-        heading2("4.1 Principe"),
-        para("Monte Carlo First-Visit est un algorithme on-policy, model-free et episodique. Contrairement a Q-Learning qui met a jour la Q-table a chaque pas (TD learning), Monte Carlo attend la fin complete de l'episode pour mettre a jour les valeurs Q."),
-
-        para([
-          bold("Fonctionnement : "),
-          normal("1) Jouer un episode complet en enregistrant chaque transition (etat, action, reward). 2) Une fois l'episode termine, calculer le retour cumule G en remontant depuis la fin. 3) Pour chaque paire (etat, action) visitee pour la premiere fois dans l'episode, mettre a jour Q(s, a) avec la moyenne incrementale de tous les retours observes.")
-        ]),
+        heading2("2.1 Fonctionnement general"),
+        para("Monte Carlo First-Visit est un algorithme on-policy, model-free et episodique. Contrairement a Q-Learning (Temporal Difference), il n'effectue aucune mise a jour pendant l'episode. Il attend la fin complete de l'episode pour mettre a jour les estimations de valeur."),
 
         para([
-          bold("Difference fondamentale avec Q-Learning : "),
-          normal("Monte Carlo n'utilise pas de learning rate alpha. Il calcule la moyenne exacte de tous les retours observes pour chaque paire (etat, action). Cela signifie que les premieres experiences (quand l'agent est mauvais) pesent autant que les dernieres dans la moyenne.")
+          bold("Les 3 phases d'un episode Monte Carlo :"),
         ]),
-
-        heading2("4.2 Resultats"),
-
-        makeTable(
-          ["Configuration", "Mean Steps", "Mean Reward"],
-          [
-            ["Monte Carlo (5 000 ep)", "183.0", "-181.1"],
-            ["Monte Carlo (50 000 ep)", "149.5", "-287.8"],
-            ["Q-Learning (5 000 ep)", "13.1", "7.9"],
-          ],
-          [3500, 2800, 2700],
-          2 // highlight Q-Learning
-        ),
-        new Paragraph({ spacing: { after: 200 } }),
-
-        para("Monte Carlo ne converge pas correctement, meme avec 50 000 episodes (10x plus que Q-Learning). La courbe d'entrainement ci-dessous illustre l'echec de convergence :"),
-
-        img("training_montecarlo_50k.png", 6.5, 5),
-        caption("Figure 6 : Courbes d'entrainement Monte Carlo (50 000 episodes) - absence de convergence"),
-
-        para("On observe que les rewards restent autour de -200 a -400 et les steps autour de 150, sans tendance claire a la baisse meme apres 50 000 episodes."),
-
-        heading2("4.3 Analyse de l'echec"),
-        para("Monte Carlo First-Visit avec moyenne incrementale echoue sur Taxi-v3 pour plusieurs raisons :"),
-
         new Paragraph({
           numbering: { reference: "numbers", level: 0 },
           spacing: { after: 100 },
-          children: [bold("Poids egal des experiences : "), normal("les premieres visites (quand l'agent est mauvais) pesent autant que les dernieres dans la moyenne incrementale. Les retours initiaux tres negatifs polluent durablement les estimations Q.")]
+          children: [bold("Generation : "), normal("jouer un episode complet en suivant la politique epsilon-greedy. Enregistrer chaque transition (etat s_t, action a_t, reward r_t).")]
         }),
         new Paragraph({
           numbering: { reference: "numbers", level: 0 },
           spacing: { after: 100 },
-          children: [bold("Mise a jour tardive : "), normal("l'agent doit terminer un episode complet avant d'apprendre. Les episodes longs (agent debutant, ~200 pas) ralentissent enormement la boucle d'apprentissage.")]
-        }),
-        new Paragraph({
-          numbering: { reference: "numbers", level: 0 },
-          spacing: { after: 100 },
-          children: [bold("Variance elevee : "), normal("les retours dans les premiers episodes ont une variance tres elevee, rendant les estimations Q instables.")]
+          children: [bold("Retour cumule : "), normal("remonter l'episode de la fin vers le debut. Pour chaque pas t, calculer le retour cumule G_t = r_t + gamma * G_{t+1}. Ce retour integre toutes les consequences futures d'une action.")]
         }),
         new Paragraph({
           numbering: { reference: "numbers", level: 0 },
           spacing: { after: 200 },
-          children: [bold("Mise a jour rare : "), normal("avec 3000 paires (etat, action) possibles, chaque paire est mise a jour au plus une fois par episode, contre potentiellement plusieurs fois avec Q-Learning (TD).")]
+          children: [bold("Mise a jour First-Visit : "), normal("pour chaque paire (etat, action) visitee pour la PREMIERE fois dans l'episode, mettre a jour la Q-table par moyenne incrementale : Q(s,a) += (G - Q(s,a)) / N(s,a), ou N(s,a) est le nombre de visites de (s,a).")]
         }),
+
+        heading2("2.2 Comparaison avec Q-Learning"),
+        makeTable(
+          ["Aspect", "Monte Carlo", "Q-Learning (TD)"],
+          [
+            ["Quand met-il a jour ?", "Fin d'episode uniquement", "A chaque pas (en ligne)"],
+            ["Learning rate (alpha) ?", "Non — moyenne exacte", "Oui — controle la vitesse"],
+            ["Bootstrap ?", "Non — retour reel complet", "Oui — estime via max Q(s')"],
+            ["Biais / Variance", "Faible biais, haute variance", "Haut biais, faible variance"],
+            ["Adapte aux episodes longs ?", "Penalise (delai signal)", "Robuste"],
+          ],
+          [3000, 3500, 3500]
+        ),
+        new Paragraph({ spacing: { after: 200 } }),
+
+        heading2("2.3 Implications pour Taxi-v3"),
+        para([
+          normal("L'absence d'alpha est un enjeu majeur : les premieres experiences, quand l'agent explore au hasard, generent des retours tres negatifs (reward -200, -400). Ces valeurs sont integrees dans la moyenne et "),
+          bold("ne peuvent pas etre corrigees"),
+          normal(" par un parametre de learning rate. Les mauvaises estimations initiales pesent durablement sur la Q-table, surtout pour des (s,a) peu visites.")
+        ]),
+        para([
+          normal("De plus, Taxi-v3 requiert une sequence de "),
+          bold("2 actions cles separees"),
+          normal(" (Pickup, puis Dropoff apres deplacement). Le signal de succes (+20) n'arrive qu'en fin d'episode, apres 13 a 200 pas. Monte Carlo doit attribuer ce credit a des decisions prises bien en amont — un credit assignment difficile.")
+        ]),
+
+        // ==================== 3. OPTIMISATION ====================
+        new Paragraph({ children: [new PageBreak()] }),
+        heading1("3. Optimisation des hyperparametres"),
+
+        para("Monte Carlo ne dispose que de deux leviers d'optimisation propres : gamma (discount factor) et epsilon_decay (vitesse de convergence vers l'exploitation). Nous appliquons la methode du grid search : faire varier un parametre a la fois en fixant tous les autres, mesurer l'impact sur les performances, puis retenir la meilleure valeur avant de passer au suivant."),
+
+        para([
+          bold("Protocole : "),
+          normal("5 000 episodes d'entrainement, 100 episodes de test en mode greedy, seed aleatoire non fixe (resultats representatifs d'une execution reelle).")
+        ]),
+
+        // ---- 3.1 Grid search gamma ----
+        heading2("3.1 Impact de gamma — Grid search"),
+
+        para([
+          normal("Gamma controle l'horizon temporel de l'agent : un gamma proche de 0 rend l'agent myope (seul le reward immediat compte) ; un gamma proche de 1 lui fait valoriser les rewards lointains. Nous testons 5 valeurs : [0.50, 0.70, 0.85, 0.95, 0.99], avec epsilon_decay=0.995 fixe le temps de cette experience.")
+        ]),
+
+        makeTable(
+          ["Gamma", "Mean Steps", "Mean Reward", "Taux de succes", "Convergence"],
+          [
+            ["0.50", "200.0", "-200.0", "0.0 %", "N/A"],
+            ["0.70", "200.0", "-200.0", "0.0 %", "N/A"],
+            ["0.85", "200.0", "-200.0", "0.0 %", "N/A"],
+            ["0.95", "194.3", "-301.7", "3.0 %", "N/A"],
+            ["0.99", "198.1", "-575.9", "1.0 %", "N/A"],
+          ],
+          [1800, 1800, 1800, 1800, 1800],
+          3
+        ),
+        new Paragraph({ spacing: { after: 200 } }),
+
+        img("mc_grid_search_gamma.png", 6.5, 2.8),
+        caption("Figure 1 : Impact de gamma sur les performances Monte Carlo (epsilon_decay=0.995 fixe)"),
+
+        para([
+          bold("Analyse des resultats :"),
+        ]),
+        para([
+          normal("Le resultat dominant est que "),
+          bold("gamma=0.95 est la seule valeur produisant un apprentissage significatif"),
+          normal(" (3 % de succes). gamma=0.99 montre un signal faible (1 %) mais reste quasi-inutilisable. Toutes les valeurs inferieures donnent 0 % de succes.")
+        ]),
+        para([
+          bold("Pourquoi gamma < 0.95 echoue : "),
+          normal("avec un faible discount, le retour cumule G_t pour une action prise 10 pas avant le succes vaut : G = +20 * gamma^10. Avec gamma=0.85, cela donne 20 * 0.85^10 = 3.9 — un signal quasi-nul. L'agent ne peut pas associer ses decisions de deplacement a la recompense finale.")
+        ]),
+        para([
+          bold("Pourquoi gamma=0.99 reste mauvais (-575.9 de reward) : "),
+          normal("un gamma tres eleve amplifie les retours negatifs des longues sequences ratees. Un episode de 200 pas avec rewards -1 a chaque pas donne G = sum(-1 * 0.99^t) pour t de 0 a 199, soit environ -86 pour le premier pas. Ces valeurs tres negatives polluent la Q-table via la moyenne incrementale, sans possibilite de correction (pas d'alpha). Avec 50 000 episodes, l'agent accumule assez de retours positifs pour atteindre 1 % de succes, mais reste largement sous-optimal.")
+        ]),
+        para([
+          bold("Valeur retenue : gamma = 0.95"),
+          normal(" — unique valeur permettant un apprentissage. Elle offre un horizon temporel suffisant pour valoriser la recompense finale, sans amplifier excessivement les penalites des longs episodes ratees.")
+        ]),
+
+        // ---- 3.2 Grid search decay ----
+        heading2("3.2 Impact d'epsilon_decay — Grid search"),
+
+        para([
+          normal("Avec gamma=0.95 fixe, nous faisons varier epsilon_decay sur [0.990, 0.995, 0.997, 0.999]. Ce parametre controle la vitesse de transition de l'exploration (epsilon=1.0) vers l'exploitation (epsilon=0.01). Un decay rapide fait passer l'agent en mode 'greedy' plus tot.")
+        ]),
+
+        makeTable(
+          ["Epsilon Decay", "Episodes pour epsilon=0.01", "Mean Steps", "Mean Reward", "Taux de succes", "Convergence"],
+          [
+            ["0.990", "~460 ep.", "181.2", "-287.1", "10.0 %", "N/A"],
+            ["0.995", "~920 ep.", "152.8", "-237.5", "25.0 %", "ep. 7 565"],
+            ["0.997", "~1 530 ep.", "200.0", "-290.0", "0.0 %", "N/A"],
+            ["0.999", "~4 605 ep.", "175.2", "-208.5", "13.0 %", "ep. 3 537"],
+          ],
+          [1600, 1600, 1600, 1600, 1600, 1400],
+          1
+        ),
+        new Paragraph({ spacing: { after: 200 } }),
+
+        img("mc_grid_search_decay.png", 6.5, 2.8),
+        caption("Figure 2 : Impact d'epsilon_decay sur les performances Monte Carlo (gamma=0.95)"),
+
+        para([
+          bold("Analyse : "),
+          normal("C'est le parametre le plus critique pour Monte Carlo. Avec 50 000 episodes, le gagnant est decay=0.995 avec 25 % de succes et convergence a l'episode 7 565 — un resultat surprenant par rapport a ce qu'on observe avec un budget de 5 000 episodes.")
+        ]),
+        para([
+          normal("L'explication tient au rapport exploration/exploitation sur le budget total. Avec decay=0.995, l'agent passe en mode greedy vers l'episode 920. Il dispose alors d'environ 49 000 episodes pour exploiter et affiner sa politique — soit ~53x plus de temps d'exploitation qu'avec decay=0.999 (qui n'atteint son minimum qu'a l'episode 46 000, laissant seulement ~4 000 episodes d'exploitation sur 50 000).")
+        ]),
+        para([
+          normal("Decay=0.997 donne paradoxalement 0 % de succes : il passe en exploitation a l'episode ~1 530, mais sa Q-table n'est pas encore assez bien construite a ce stade. Il se retrouve bloque dans une politique sous-optimale, avec trop peu d'exploration pour s'en sortir et trop peu d'episodes d'exploitation pour se rattraper.")
+        ]),
+        para([
+          bold("Valeur retenue : epsilon_decay = 0.995"),
+          normal(" — meilleur compromis entre construction de la Q-table et temps d'exploitation sur un budget de 50 000 episodes. Ce resultat illustre que l'hyperparametre optimal de Monte Carlo depend du budget d'entrainement disponible.")
+        ]),
+
+        // ==================== 4. RESULTATS ====================
+        new Paragraph({ children: [new PageBreak()] }),
+        heading1("4. Resultats finaux — Parametres optimaux"),
+
+        heading2("4.1 Configuration optimale"),
+        para("En combinant les resultats des deux grid searches, les parametres optimaux pour Monte Carlo sur Taxi-v3 sont :"),
+
+        makeTable(
+          ["Parametre", "Valeur", "Source"],
+          [
+            ["Gamma (discount factor)", "0.95", "Grid search gamma — seule valeur non nulle"],
+            ["Epsilon initial", "1.0", "Exploration totale au depart"],
+            ["Epsilon minimum", "0.01", "Exploration residuelle en fin d'entrainement"],
+            ["Epsilon decay", "0.995", "Grid search decay — meilleur ratio exploration/exploitation sur 50k ep."],
+            ["Episodes d'entrainement", "50 000", "Budget suffisant pour la convergence MC"],
+            ["Episodes de test", "100", "Mode greedy (epsilon=0)"],
+          ],
+          [2800, 1800, 5400]
+        ),
+        new Paragraph({ spacing: { after: 200 } }),
+
+        heading2("4.2 Courbes d'entrainement"),
+
+        img("mc_training_optimized.png", 6.5, 5),
+        caption("Figure 3 : Courbes d'entrainement Monte Carlo (gamma=0.95, epsilon_decay=0.995, 50 000 ep.)"),
+
+        para([
+          bold("Lecture des courbes : "),
+          normal("La courbe de reward (lissee sur 100 episodes) progresse sur les 50 000 episodes, avec une transition visible vers l'episode 920 quand epsilon atteint son minimum et l'agent bascule en exploitation. Le bruit reste eleve (ecart-type = 367.6) du fait des episodes bimodaux : succes nets vs echecs complets. C'est la variance inherente a Monte Carlo sans alpha.")
+        ]),
+
+        heading2("4.3 Evaluation sur 8 metriques"),
+        para([
+          normal("Evaluation sur "),
+          bold("100 episodes de test en mode greedy"),
+          normal(" (epsilon=0, exploitation pure), apres 50 000 episodes d'entrainement.")
+        ]),
+
+        makeTable(
+          ["#", "Metrique", "Definition", "Monte Carlo (opt.)"],
+          [
+            ["1", "Reward moyen", "mean(rewards)", "-238.5"],
+            ["2", "Ecart-type reward", "std(rewards)", "367.6"],
+            ["3", "Steps moyens", "mean(steps)", "169.9"],
+            ["4", "Ecart-type steps", "std(steps)", "69.0"],
+            ["5", "Taux de succes", "mean(reward > 0) * 100", "16.0 %"],
+            ["6", "Reward / step", "sum(R) / sum(S)", "-1.404"],
+            ["7", "Actes illegaux", "count(reward == -10)", "800"],
+            ["8", "Episode de convergence", "1er ep. succes >= 25%/50ep", "ep. 5 761"],
+          ],
+          [400, 2200, 2800, 2600]
+        ),
+        new Paragraph({ spacing: { after: 200 } }),
+
+        heading2("4.4 Interpretation des metriques"),
+
+        para([
+          bold("Metrique 5 — Taux de succes 16 % : "),
+          normal("Monte Carlo resout le jeu dans 16 episodes sur 100. Ce chiffre, malgre sa modestie, represente un apprentissage reel : en brute-force, ce taux est de 0 %. L'agent a bien appris une politique partielle.")
+        ]),
+        para([
+          bold("Metrique 2 — Ecart-type reward = 367.6 : "),
+          normal("la variance tres elevee (vs 2.2 pour Q-Learning) revele la bimodalite de la politique MC : soit l'episode est un succes (reward positif, ~13 steps), soit c'est un echec complet (200 steps, reward -200). L'ecart-type depasse en valeur absolue le reward moyen, signe d'une politique instable qui n'a pas converge uniformement.")
+        ]),
+        para([
+          bold("Metrique 7 — 800 actes illegaux : "),
+          normal("Monte Carlo n'a pas appris a eviter systematiquement les Pickup/Dropoff illegaux. Avec TD learning, chaque penalite -10 est integree immediatement dans Q(s, Pickup). Avec Monte Carlo, cette penalite est diluee dans un retour cumule de fin d'episode et son signal est affaibli par les autres transitions de l'episode.")
+        ]),
+        para([
+          bold("Metrique 8 — Convergence ep. 5 761 : "),
+          normal("Monte Carlo necessite 10.9 fois plus d'episodes que Q-Learning (529) pour atteindre le seuil de 25 % de succes sur 50 episodes. Chaque episode de 200 pas ne produit qu'une mise a jour par (s,a). Q-Learning effectue une mise a jour par pas, soit jusqu'a 200x plus de mises a jour par episode long.")
+        ]),
 
         // ==================== 5. COMPARAISON ====================
+        new Paragraph({ children: [new PageBreak()] }),
         heading1("5. Comparaison inter-algorithmes"),
 
-        heading2("5.1 Tableau de synthese"),
+        heading2("5.1 Tableau de synthese — 8 metriques"),
+        para([
+          normal("Comparaison sur 100 episodes de test en mode greedy. Chaque algorithme a ete entraine avec ses parametres optimaux. Monte Carlo : gamma=0.95, epsilon_decay=0.995, 50 000 episodes. Q-Learning : alpha=0.1, gamma=0.99, epsilon_decay=0.995. Brute-Force : aucun apprentissage.")
+        ]),
 
         makeTable(
-          ["Algorithme", "Mean Steps", "Mean Reward", "Convergence", "Adapte"],
+          ["Metrique", "Brute-Force", "Q-Learning", "Monte Carlo"],
           [
-            ["Brute-Force", "196.8", "-786.5", "N/A", "Non"],
-            ["Q-Learning (naif)", "13.4", "7.6", "~1500 ep", "Oui"],
-            ["Q-Learning (opt.)", "13.1", "7.9", "~1000 ep", "Optimal"],
-            ["Monte Carlo (5k)", "183.0", "-181.1", "Non converge", "Non"],
-            ["Monte Carlo (50k)", "149.5", "-287.8", "Non converge", "Non"],
+            ["Reward moyen",       "-774.3",  "8.4",     "-238.5"],
+            ["Ecart-type reward",  "94.1",    "2.2",     "367.6"],
+            ["Steps moyens",       "197.2",   "12.6",    "169.9"],
+            ["Ecart-type steps",   "13.2",    "2.2",     "69.0"],
+            ["Taux de succes",     "0.0 %",   "100.0 %", "16.0 %"],
+            ["Reward / step",      "-3.927",  "0.671",   "-1.404"],
+            ["Actes illegaux",     "6 424",   "0",       "800"],
+            ["Convergence",        "N/A",     "ep. 529", "ep. 5 761"],
           ],
-          [2200, 1600, 1600, 1800, 1800],
-          2 // highlight Q-Learning optimise
+          [3000, 2000, 2000, 2000],
+          1
         ),
         new Paragraph({ spacing: { after: 200 } }),
 
-        heading2("5.2 Comparaison visuelle"),
+        heading2("5.2 Courbes d'apprentissage comparatives"),
 
-        img("comparison_final.png", 6.5, 2.8),
-        caption("Figure 7 : Brute-Force vs Q-Learning optimise"),
+        img("mc_vs_ql_curves.png", 6.5, 3),
+        caption("Figure 4 : Courbes d'apprentissage Q-Learning vs Monte Carlo (reward et steps lisses sur 100 ep.)"),
 
-        img("algo_comparison_ql_mc.png", 6.5, 4.5),
-        caption("Figure 8 : Q-Learning vs Monte Carlo - barplots et courbes d'apprentissage"),
+        img("mc_metrics_comparison.png", 6.5, 3),
+        caption("Figure 5 : Comparaison des 4 metriques principales — Brute-Force, Q-Learning, Monte Carlo"),
 
-        heading2("5.3 Analyse"),
-        para("Q-Learning est clairement superieur pour Taxi-v3. Trois facteurs expliquent cette dominance :"),
+        heading2("5.3 Analyse des ecarts"),
 
-        new Paragraph({
-          numbering: { reference: "numbers", level: 0 },
-          spacing: { after: 100 },
-          children: [bold("Temporal Difference vs Monte Carlo : "), normal("Q-Learning met a jour la Q-table a chaque pas, ce qui accelere considerablement l'apprentissage par rapport a Monte Carlo qui attend la fin de l'episode.")]
-        }),
-        new Paragraph({
-          numbering: { reference: "numbers", level: 0 },
-          spacing: { after: 100 },
-          children: [bold("Learning rate alpha : "), normal("le parametre alpha permet a Q-Learning de ponderer les nouvelles experiences, donnant plus de poids aux retours recents. Monte Carlo utilise une moyenne brute, ce qui dilue l'apprentissage.")]
-        }),
-        new Paragraph({
-          numbering: { reference: "numbers", level: 0 },
-          spacing: { after: 200 },
-          children: [bold("Convergence rapide : "), normal("Q-Learning converge en ~1000 episodes, la ou Monte Carlo ne converge pas meme apres 50 000 episodes sur ce probleme.")]
-        }),
-
-        // ==================== 6. ARCHITECTURE ====================
-        new Paragraph({ children: [new PageBreak()] }),
-        heading1("6. Architecture du programme"),
-
-        heading2("6.1 Modes d'execution"),
-        para("Le programme propose trois modes :"),
-
-        new Paragraph({
-          numbering: { reference: "bullets", level: 0 },
-          spacing: { after: 100 },
-          children: [bold("Mode User : "), normal("l'utilisateur entre ses hyperparametres (alpha, gamma, epsilon, decay) ainsi que le nombre d'episodes d'entrainement et de test.")]
-        }),
-        new Paragraph({
-          numbering: { reference: "bullets", level: 0 },
-          spacing: { after: 100 },
-          children: [bold("Mode Time-limited : "), normal("utilise les parametres optimises et entraine le maximum d'episodes dans un budget de temps donne.")]
-        }),
-        new Paragraph({
-          numbering: { reference: "bullets", level: 0 },
-          spacing: { after: 200 },
-          children: [bold("Mode Benchmark : "), normal("lance le grid search complet automatiquement et genere tous les graphiques.")]
-        }),
-
-        heading2("6.2 Structure des fichiers"),
-        makeTable(
-          ["Fichier", "Role"],
-          [
-            ["main.py", "Point d'entree, gestion des modes via argparse"],
-            ["environment.py", "Wrapper autour de Gymnasium Taxi-v3"],
-            ["bruteforce.py", "Agent brute-force (baseline)"],
-            ["qlearning.py", "Agent Q-Learning avec Q-table"],
-            ["montecarlo.py", "Agent Monte Carlo First-Visit"],
-            ["benchmark.py", "Outils de benchmark et generation de graphiques"],
-          ],
-          [3000, 6000]
-        ),
-        new Paragraph({ spacing: { after: 200 } }),
-
-        heading2("6.3 Utilisation"),
-        para([
-          normal("Exemples de commandes :\n"),
-        ]),
-        para([
-          bold("python main.py user --alpha 0.5 --gamma 0.95 --train 5000 --test 100"),
-        ]),
-        para([
-          bold("python main.py time --time 60 --test 100"),
-        ]),
-        para([
-          bold("python main.py benchmark --train 5000 --test 100"),
-        ]),
-
-        // ==================== 7. CONCLUSION ====================
-        heading1("7. Conclusion"),
-
-        para("Cette etude demontre que Q-Learning tabulaire est l'algorithme optimal pour resoudre l'environnement Taxi-v3. Plusieurs enseignements cles ressortent de ce travail :"),
+        para("La comparaison revele trois niveaux de performance distincts :"),
 
         new Paragraph({
           numbering: { reference: "numbers", level: 0 },
           spacing: { after: 100 },
-          children: [bold("L'espace d'etats conditionne le choix algorithmique : "), normal("avec seulement 500 etats discrets, une approche tabulaire est ideale. Un reseau de neurones (DQN) serait superflu et potentiellement moins performant.")]
+          children: [bold("Brute-Force (reference inferieure) : "), normal("0 % de succes, 6 421 actes illegaux, reward/step de -3.921. Valeur de baseline uniquement, confirme que tout algorithme d'apprentissage apporte une amelioration mesurable.")]
         }),
         new Paragraph({
           numbering: { reference: "numbers", level: 0 },
           spacing: { after: 100 },
-          children: [bold("Le Temporal Difference domine sur Monte Carlo : "), normal("la mise a jour a chaque pas (vs fin d'episode) et le learning rate alpha sont des avantages decisifs pour la convergence.")]
-        }),
-        new Paragraph({
-          numbering: { reference: "numbers", level: 0 },
-          spacing: { after: 100 },
-          children: [bold("L'optimisation methodique paie : "), normal("le grid search sequentiel (alpha, puis gamma, puis epsilon_decay) a permis de passer de 13.4 a 13.1 steps en moyenne, confirmant que chaque parametre contribue aux performances finales.")]
+          children: [bold("Monte Carlo (apprentissage partiel) : "), normal("16 % de succes, ameliorations quantifiables : -238.5 de reward vs -774.3 pour BF (facteur 3.2), 169.9 steps vs 197.2 (reduction de 14 %), 800 actes illegaux vs 6 424 (reduction de 88 %). L'algorithme apprend une politique partielle mais ne converge pas completement.")]
         }),
         new Paragraph({
           numbering: { reference: "numbers", level: 0 },
           spacing: { after: 200 },
-          children: [bold("Le benchmark est essentiel : "), normal("sans la baseline brute-force et le comparatif Monte Carlo, il serait impossible de quantifier objectivement la qualite de notre solution Q-Learning.")]
+          children: [bold("Q-Learning (performance optimale) : "), normal("100 % de succes, 0 acte illegal, ecart-type de 2.4 (stabilite parfaite). La mise a jour en ligne (TD) avec learning rate alpha est decisvement superieure a la mise a jour episodique sans alpha pour un environnement avec credit assignment retarde comme Taxi-v3.")]
+        }),
+
+        heading2("5.4 Pourquoi Monte Carlo echoue a converger completement"),
+
+        para("Les resultats permettent d'identifier 4 causes structurelles :"),
+
+        new Paragraph({
+          numbering: { reference: "numbers", level: 0 },
+          spacing: { after: 120 },
+          children: [
+            bold("Pollution de la moyenne sans correction (ecart-type = 367.6 vs 2.2 pour QL) : "),
+            normal("les premiers episodes exploratoires (reward -200 a -400) remplissent la Q-table de valeurs tres negatives. Sans alpha, Monte Carlo ne peut pas 'oublier' ces mauvaises estimations. Q-Learning avec alpha=0.1 les efface en ~10 mises a jour.")
+          ]
+        }),
+        new Paragraph({
+          numbering: { reference: "numbers", level: 0 },
+          spacing: { after: 120 },
+          children: [
+            bold("Apprentissage lent des penalites -10 (800 actes illegaux vs 0) : "),
+            normal("en TD learning, la penalite Pickup illegal est integree immediatement dans Q(s, Pickup). En MC, elle est diluee dans un retour cumule de 200 pas et son signal est attenue par les autres rewards de l'episode.")
+          ]
+        }),
+        new Paragraph({
+          numbering: { reference: "numbers", level: 0 },
+          spacing: { after: 120 },
+          children: [
+            bold("Efficacite d'apprentissage superieure de Q-Learning (convergence ep. 5 761 vs 529) : "),
+            normal("un episode de 200 pas produit ~200 transitions mais seulement 1 retour G par (s,a) premiere visite pour Monte Carlo. Q-Learning genere 200 mises a jour independantes par episode. MC necessite 10.9x plus d'episodes pour converger, meme avec un budget de 50 000 episodes.")
+          ]
+        }),
+        new Paragraph({
+          numbering: { reference: "numbers", level: 0 },
+          spacing: { after: 200 },
+          children: [
+            bold("Sensibilite extreme aux hyperparametres et au budget : "),
+            normal("decay=0.997 donne 0 % de succes alors que 0.995 donne 25 %. Pire, le meilleur decay change selon le budget (0.999 optimal a 5k episodes, 0.995 a 50k). Cette fragilite contraste avec Q-Learning, robuste sur une large plage de parametres independamment du budget.")
+          ]
+        }),
+
+        // ==================== 6. CONCLUSION ====================
+        heading1("6. Conclusion"),
+
+        para("Cette analyse approfondie de Monte Carlo First-Visit sur Taxi-v3 montre que l'algorithme peut apprendre une politique partielle mais ne converge pas completement sur cet environnement. Les resultats quantitatifs sur 8 metriques permettent de dresser le bilan suivant :"),
+
+        new Paragraph({
+          numbering: { reference: "bullets", level: 0 },
+          spacing: { after: 100 },
+          children: [bold("Ce qui fonctionne : "), normal("MC reduit les actes illegaux de 88 % (6 424 -> 800) et le reward moyen de 69 % par rapport au brute-force, prouvant un apprentissage reel.")]
+        }),
+        new Paragraph({
+          numbering: { reference: "bullets", level: 0 },
+          spacing: { after: 100 },
+          children: [bold("Ce qui bloque : "), normal("l'absence d'alpha, la mise a jour episodique et la sensibilite a epsilon_decay empechent une convergence complete sur un probleme a credit assignment retarde.")]
+        }),
+        new Paragraph({
+          numbering: { reference: "bullets", level: 0 },
+          spacing: { after: 200 },
+          children: [bold("Le parametre cle : "), normal("epsilon_decay=0.995 est optimal sur 50 000 episodes. Il equilibre exploration suffisante (~920 episodes) et exploitation prolongee (~49 000 episodes), permettant a la Q-table de se constituer puis de se raffiner. Ce parametre optimal depend du budget — avec 5k episodes, 0.999 serait preferable.")]
         }),
 
         para([
-          normal("Les parametres optimaux retenus sont : "),
-          bold("alpha=0.5, gamma=0.95, epsilon_decay=0.999"),
-          normal(", permettant de resoudre Taxi-v3 en "),
-          bold("~13 steps"),
-          normal(" en moyenne, contre ~197 pour le brute-force, soit une amelioration d'un facteur 15.")
+          normal("Monte Carlo est intrinsequement mieux adapte aux environnements ou les episodes sont courts, les rewards peu retardes, et ou l'on dispose d'un budget d'episodes important. Sur Taxi-v3, la longueur variable des episodes (13 a 200 pas) et la nature sequentielle de la tache favorisent des algorithmes a mise a jour en ligne comme Q-Learning.")
         ]),
 
         new Paragraph({ spacing: { before: 400 } }),
         para([
-          bold("Pistes d'amelioration : "),
-          normal("pour des environnements avec des espaces d'etats plus grands ou continus, des approches comme le Deep Q-Network (DQN) ou les methodes Policy Gradient deviendraient necessaires. L'extension proposee (2 passagers, 4 destinations chacun) multiplierait l'espace d'etats et pourrait justifier l'usage de telles approches.")
+          bold("Parametres optimaux Monte Carlo retenus : "),
+          normal("gamma=0.95, epsilon_decay=0.995, 50 000 episodes. Taux de succes final : 16 % (vs 0 % brute-force, 100 % Q-Learning). Convergence partielle a l'episode 5 761.")
         ]),
       ]
     }
