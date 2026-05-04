@@ -44,43 +44,47 @@ class BruteForceAgent:
 
 def run_bruteforce(n_episodes):
     """
-    Lance n_episodes parties avec l'agent brute-force et collecte les stats.
-
-    Args:
-        n_episodes: nombre de parties à jouer
-
-    Returns:
-        results: dict contenant les listes de rewards et steps
+    Lance n_episodes parties avec l'agent brute-force et collecte les 8 métriques.
     """
-    # On crée l'environnement SANS affichage (plus rapide)
     env = create_env(render_mode=None)
     agent = BruteForceAgent()
 
-    all_rewards = []
-    all_steps = []
+    all_rewards, all_steps, all_illegal = [], [], []
 
-    for episode in tqdm(range(n_episodes), desc="Brute-force"):
-        # On joue un épisode complet avec des actions aléatoires
-        reward, steps, done = run_episode(
-            env,
-            agent.select_action,  # On passe la fonction de sélection
-            max_steps=500         # Limite haute pour le brute-force
-        )
-        all_rewards.append(reward)
+    for _ in tqdm(range(n_episodes), desc="Brute-force"):
+        state, _ = env.reset()
+        total_reward, steps, illegal = 0, 0, 0
+        for _ in range(500):
+            action = agent.select_action(state)
+            state, reward, terminated, truncated, _ = env.step(action)
+            total_reward += reward
+            steps += 1
+            if reward == -10:
+                illegal += 1
+            if terminated or truncated:
+                break
+        all_rewards.append(total_reward)
         all_steps.append(steps)
+        all_illegal.append(illegal)
 
     env.close()
 
-    results = {
+    rewards = np.array(all_rewards)
+    steps_arr = np.array(all_steps)
+    success = rewards > 0
+
+    return {
         "rewards": all_rewards,
         "steps": all_steps,
-        "mean_reward": np.mean(all_rewards),
-        "mean_steps": np.mean(all_steps),
-        "std_reward": np.std(all_rewards),
-        "std_steps": np.std(all_steps),
+        "mean_reward":      float(np.mean(rewards)),
+        "std_reward":       float(np.std(rewards)),
+        "mean_steps":       float(np.mean(steps_arr)),
+        "std_steps":        float(np.std(steps_arr)),
+        "success_rate":     float(np.mean(success) * 100),
+        "reward_per_step":  float(np.sum(rewards) / np.sum(steps_arr)),
+        "illegal_actions":  int(np.sum(all_illegal)),
+        "convergence_episode": None,
     }
-
-    return results
 
 
 def display_bruteforce_episode():

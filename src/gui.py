@@ -300,8 +300,8 @@ class TaxiGUI:
         pc = self._card(left, "Hyperparamètres")
         pc.pack(fill="x", pady=(0, 8))
         pg = self._gf(pc)
-        self.p_alpha   = ParamRow(pg, "Alpha (lr)",       0.01, 1.0,  0.01,  0.5,   0)
-        self.p_gamma   = ParamRow(pg, "Gamma (discount)", 0.5,  1.0,  0.01,  0.95,  1)
+        self.p_alpha   = ParamRow(pg, "Alpha (lr)",       0.01, 1.0,  0.01,  0.1,   0)
+        self.p_gamma   = ParamRow(pg, "Gamma (discount)", 0.5,  1.0,  0.01,  0.99,  1)
         self.p_eps     = ParamRow(pg, "Epsilon (init)",   0.0,  1.0,  0.01,  1.0,   2)
         self.p_eps_min = ParamRow(pg, "Epsilon min",      0.0,  0.5,  0.001, 0.01,  3)
         self.p_eps_dec = ParamRow(pg, "Epsilon decay",    0.9,  1.0,  0.001, 0.995, 4)
@@ -600,6 +600,17 @@ class TaxiGUI:
             epsilon_decay=self.p_eps_dec.get(),
         )
 
+    def _log_metrics(self, name, r):
+        conv = r.get('convergence_episode')
+        conv_str = f'ep.{conv}' if conv is not None else 'N/A'
+        self._log(f'  -- {name} --')
+        self._log(f"  Reward moyen   : {r['mean_reward']:>8.1f}  (sd={r['std_reward']:.1f})")
+        self._log(f"  Steps moyens   : {r['mean_steps']:>8.1f}  (sd={r['std_steps']:.1f})")
+        self._log(f"  Taux succes    : {r.get('success_rate', 0):>7.1f}%")
+        self._log(f"  Reward/step    : {r.get('reward_per_step', 0):>8.3f}")
+        self._log(f"  Actes illegaux : {r.get('illegal_actions', 0):>8d}")
+        self._log(f'  Convergence    : {conv_str}')
+
     def _run_user(self):
         p = self._params()
         n_train, n_test = self.p_train.get(), self.p_test.get()
@@ -625,9 +636,11 @@ class TaxiGUI:
         self._log(f"\n[3/3] Test ({n_test} épisodes)…")
         ql = test_qlearning(agent, n_test, verbose=False)
 
+        ql["convergence_episode"] = history.get("convergence_episode")
+
         self._log("\n" + "═" * 52, "success")
-        self._log(f"  Brute-Force → steps: {bf['mean_steps']:.1f} | reward: {bf['mean_reward']:.1f}")
-        self._log(f"  Q-Learning  → steps: {ql['mean_steps']:.1f} | reward: {ql['mean_reward']:.1f}", "success")
+        self._log_metrics("Brute-Force", bf)
+        self._log_metrics("Q-Learning", ql)
         self._log("═" * 52, "success")
         self._log("\n  ▶ Clique sur 'Regarder épisode' pour voir l'agent !", "success")
 
@@ -673,7 +686,8 @@ class TaxiGUI:
         self._log(f"\n  {len(all_rewards)} épisodes en {elapsed:.1f}s")
 
         ql = test_qlearning(agent, n_test, verbose=False)
-        self._log(f"\n  steps: {ql['mean_steps']:.1f} | reward: {ql['mean_reward']:.1f}", "success")
+        ql["convergence_episode"] = history.get("convergence_episode")
+        self._log_metrics("Q-Learning (time-limited)", ql)
         self._log("\n  ▶ Clique sur 'Regarder épisode' pour voir l'agent !", "success")
 
         history = {"rewards": all_rewards, "steps": all_steps,
@@ -718,10 +732,11 @@ class TaxiGUI:
         self._agent = agent
         ql = test_qlearning(agent, n_test, verbose=False)
 
+        ql["convergence_episode"] = history.get("convergence_episode")
+
         self._log("\n" + "═" * 52, "success")
-        self._log(f"  Brute-Force → steps: {bf['mean_steps']:.1f} | reward: {bf['mean_reward']:.1f}")
-        self._log(f"  Q-Learning  → steps: {ql['mean_steps']:.1f} | reward: {ql['mean_reward']:.1f}", "success")
-        self._log(f"  α={best_alpha}  γ={best_gamma}", "success")
+        self._log_metrics("Brute-Force", bf)
+        self._log_metrics(f"Q-Learning (α={best_alpha} γ={best_gamma})", ql)
         self._log("═" * 52, "success")
         self._log("\n  ▶ Clique sur 'Regarder épisode' pour voir l'agent !", "success")
 

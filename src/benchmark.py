@@ -320,18 +320,40 @@ def plot_algo_comparison(results_dict, histories_dict, filename="algo_comparison
 
 def print_results_table(title, results_list):
     """
-    Affiche un tableau formaté de résultats dans le terminal.
+    Affiche un tableau des 8 métriques communes.
+
+    Métriques :
+        1. Récompense moyenne     2. σ(reward)
+        3. Steps moyens           4. σ(steps)
+        5. Taux de succès (%)     6. Reward / step
+        7. Actes illégaux         8. Épisode de convergence
 
     Args:
         title        : titre du tableau
         results_list : liste de tuples (nom, results_dict)
     """
-    print(f"\n{'=' * 60}")
+    W = 96
+    print(f"\n{'=' * W}")
     print(f"  {title}")
-    print(f"{'=' * 60}")
-    print(f"  {'Algorithme':<25} {'Mean Steps':>12} {'Mean Reward':>12}")
-    print(f"  {'-' * 49}")
-    for name, results in results_list:
-        print(f"  {name:<25} {results['mean_steps']:>12.1f} "
-              f"{results['mean_reward']:>12.1f}")
-    print(f"{'=' * 60}\n")
+    print(f"{'=' * W}")
+    hdr = (f"  {'Algorithme':<20} {'Mean R':>8} {'sd(R)':>7} "
+           f"{'Steps':>7} {'sd(S)':>7} {'Succes%':>8} "
+           f"{'R/step':>8} {'Illegaux':>9} {'Conv.':>8}")
+    print(hdr)
+    print(f"  {'-' * (W - 2)}")
+    for name, r in results_list:
+        conv = r.get("convergence_episode")
+        conv_str = f"ep.{conv}" if conv is not None else "N/A"
+        rps = r.get("reward_per_step", 0.0)
+        print(
+            f"  {name:<20} "
+            f"{r['mean_reward']:>8.1f} "
+            f"{r['std_reward']:>7.1f} "
+            f"{r['mean_steps']:>7.1f} "
+            f"{r['std_steps']:>7.1f} "
+            f"{r.get('success_rate', 0.0):>7.1f}% "
+            f"{rps:>8.3f} "
+            f"{r.get('illegal_actions', 0):>9d} "
+            f"{conv_str:>8}"
+        )
+    print(f"{'=' * W}\n")

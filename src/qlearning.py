@@ -149,6 +149,15 @@ class QLearningAgent:
         self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
 
 
+def _find_convergence_episode(rewards, window=50, threshold=0.25):
+    """Premier épisode où le taux de succès sur les 50 derniers épisodes atteint 25%."""
+    success = np.array(rewards) > 0
+    for i in range(window, len(success) + 1):
+        if np.mean(success[i - window:i]) >= threshold:
+            return i - window + 1  # 1-indexé, premier épisode de la fenêtre
+    return None
+
+
 def train_qlearning(n_episodes, alpha=0.1, gamma=0.99, epsilon=1.0,
                     epsilon_min=0.01, epsilon_decay=0.995, verbose=True):
     """
@@ -230,6 +239,7 @@ def train_qlearning(n_episodes, alpha=0.1, gamma=0.99, epsilon=1.0,
         history["epsilons"].append(agent.epsilon)
 
     env.close()
+    history["convergence_episode"] = _find_convergence_episode(history["rewards"])
     return agent, history
 
 
@@ -250,34 +260,44 @@ def test_qlearning(agent, n_episodes, verbose=True):
     """
     env = create_env(render_mode=None)
 
-    all_rewards = []
-    all_steps = []
+    all_rewards, all_steps, all_illegal = [], [], []
 
     iterator = tqdm(range(n_episodes), desc="Testing Q-Learning") if verbose else range(n_episodes)
 
-    for episode in iterator:
-        # On utilise select_best_action : AUCUNE exploration
-        # L'agent fait toujours ce qu'il pense être le mieux
-        reward, steps, done = run_episode(
-            env,
-            agent.select_best_action,
-            max_steps=200
-        )
-        all_rewards.append(reward)
+    for _ in iterator:
+        state, _ = env.reset()
+        total_reward, steps, illegal = 0, 0, 0
+        for _ in range(200):
+            action = agent.select_best_action(state)
+            state, reward, terminated, truncated, _ = env.step(action)
+            total_reward += reward
+            steps += 1
+            if reward == -10:
+                illegal += 1
+            if terminated or truncated:
+                break
+        all_rewards.append(total_reward)
         all_steps.append(steps)
+        all_illegal.append(illegal)
 
     env.close()
 
-    results = {
+    rewards = np.array(all_rewards)
+    steps_arr = np.array(all_steps)
+    success = rewards > 0
+
+    return {
         "rewards": all_rewards,
         "steps": all_steps,
-        "mean_reward": np.mean(all_rewards),
-        "mean_steps": np.mean(all_steps),
-        "std_reward": np.std(all_rewards),
-        "std_steps": np.std(all_steps),
+        "mean_reward":      float(np.mean(rewards)),
+        "std_reward":       float(np.std(rewards)),
+        "mean_steps":       float(np.mean(steps_arr)),
+        "std_steps":        float(np.std(steps_arr)),
+        "success_rate":     float(np.mean(success) * 100),
+        "reward_per_step":  float(np.sum(rewards) / np.sum(steps_arr)),
+        "illegal_actions":  int(np.sum(all_illegal)),
+        "convergence_episode": None,  # rempli depuis history après train
     }
-
-    return results
 
 
 def display_qlearning_episode(agent):
