@@ -15,7 +15,6 @@ Mise à jour (mini-batch) :
 """
 
 import numpy as np
-from collections import deque
 from tqdm import tqdm
 from environment import create_env, get_env_info
 
@@ -71,23 +70,34 @@ class _MLP:
 # ─────────────────────────────────────────────────────
 
 class ReplayBuffer:
+    """Buffer circulaire numpy — accès O(1) au lieu de O(n) avec deque."""
+
     def __init__(self, maxlen=10_000):
-        self.buf = deque(maxlen=maxlen)
+        self.maxlen  = maxlen
+        self.states  = np.zeros(maxlen, dtype=np.int32)
+        self.actions = np.zeros(maxlen, dtype=np.int32)
+        self.rewards = np.zeros(maxlen, dtype=np.float32)
+        self.nexts   = np.zeros(maxlen, dtype=np.int32)
+        self.dones   = np.zeros(maxlen, dtype=np.float32)
+        self._size   = 0
+        self._idx    = 0
 
     def push(self, s, a, r, ns, done):
-        self.buf.append((s, a, r, ns, done))
+        self.states [self._idx] = s
+        self.actions[self._idx] = a
+        self.rewards[self._idx] = r
+        self.nexts  [self._idx] = ns
+        self.dones  [self._idx] = float(done)
+        self._idx  = (self._idx + 1) % self.maxlen
+        self._size = min(self._size + 1, self.maxlen)
 
     def sample(self, n):
-        idx = np.random.choice(len(self.buf), n, replace=False)
-        s, a, r, ns, d = zip(*[self.buf[i] for i in idx])
-        return (np.array(s,  dtype=np.int32),
-                np.array(a,  dtype=np.int32),
-                np.array(r,  dtype=np.float32),
-                np.array(ns, dtype=np.int32),
-                np.array(d,  dtype=np.float32))
+        idx = np.random.choice(self._size, n, replace=True)
+        return (self.states[idx], self.actions[idx], self.rewards[idx],
+                self.nexts[idx],  self.dones[idx])
 
     def __len__(self):
-        return len(self.buf)
+        return self._size
 
 
 # ─────────────────────────────────────────────────────
@@ -98,9 +108,9 @@ class DQNAgent:
     """Deep Q-Network : réseau de neurones + experience replay + target network."""
 
     def __init__(self, n_states=500, n_actions=6,
-                 gamma=0.99, lr=0.001,
+                 gamma=0.99, lr=5e-4,
                  epsilon=1.0, epsilon_min=0.01, epsilon_decay=0.995,
-                 batch_size=32, memory_size=10_000, target_update=100):
+                 batch_size=64, memory_size=10_000, target_update=200):
         self.n_states      = n_states
         self.n_actions     = n_actions
         self.gamma         = gamma
@@ -111,13 +121,14 @@ class DQNAgent:
         self.target_update = target_update
         self._steps        = 0
 
-        sizes = [n_states, 64, 32, n_actions]
+        sizes = [n_states, 8, 128, n_actions]
         self.main   = _MLP(sizes, lr=lr)
         self.target = _MLP(sizes, lr=lr)
         self.target.copy_from(self.main)
 
         self.memory = ReplayBuffer(memory_size)
         self._eye   = np.eye(n_states, dtype=np.float32)  # one-hot lookup
+        self._bidx  = np.arange(batch_size)               # pré-alloué
 
     def select_action(self, state):
         if np.random.random() < self.epsilon:
@@ -140,10 +151,10 @@ class DQNAgent:
         targets = r + self.gamma * q_next.max(axis=1) * (1.0 - d)
 
         q_pred  = self.main.forward(s_oh)
-        err     = q_pred[np.arange(self.batch_size), a] - targets
+        err     = q_pred[self._bidx, a] - targets
 
         grad = np.zeros_like(q_pred)
-        grad[np.arange(self.batch_size), a] = 2.0 * err / self.batch_size
+        grad[self._bidx, a] = 2.0 * err / self.batch_size
         self.main.backward(grad)
 
         self._steps += 1
@@ -166,9 +177,9 @@ def _find_convergence_episode(rewards, window=50, threshold=0.25):
     return None
 
 
-def train_dqn(n_episodes, gamma=0.99, lr=0.001,
+def train_dqn(n_episodes, gamma=0.99, lr=5e-4,
               epsilon=1.0, epsilon_min=0.01, epsilon_decay=0.995,
-              batch_size=32, memory_size=10_000, target_update=100,
+              batch_size=64, memory_size=10_000, target_update=200,
               verbose=True):
     env = create_env(render_mode=None)
     n_states, n_actions = get_env_info(env)

@@ -304,10 +304,10 @@ class TaxiGUI:
         # Paramètres DQN (card affichée uniquement pour DQN)
         self._dqn_card = self._card(left, "Paramètres DQN")
         dg = self._gf(self._dqn_card)
-        self.p_lr           = ParamRow(dg,    "Learning rate",  0.0001, 0.01, 0.0001, 0.001, 0, fmt="{:.4f}")
-        self.p_batch        = IntParamRow(dg, "Batch size",      16,    256,   32,    0, resolution=16)
+        self.p_lr           = ParamRow(dg,    "Learning rate",  0.0001, 0.01, 0.0001, 0.0005, 0, fmt="{:.4f}")
+        self.p_batch        = IntParamRow(dg, "Batch size",      16,    256,   64,    0, resolution=16)
         self.p_memory       = IntParamRow(dg, "Memory size",    1000, 50000, 10000,   1, resolution=1000)
-        self.p_target_upd   = IntParamRow(dg, "Target update",    50,   500,  100,    2, resolution=50)
+        self.p_target_upd   = IntParamRow(dg, "Target update",    50,   500,  200,    2, resolution=50)
 
         # Épisodes
         ec = self._card(left, "Épisodes")

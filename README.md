@@ -10,6 +10,7 @@ Implémentation et comparaison de trois algorithmes de reinforcement learning su
 |---|---|---|---|
 | **Brute-Force** | Baseline | `bruteforce.py` | Actions aléatoires, aucun apprentissage |
 | **Q-Learning** | Off-policy, tabulaire | `qlearning.py` | Q-table 500×6, mise à jour Bellman à chaque pas |
+| **SARSA** | On-policy, tabulaire | `sarsa.py` | Q(s,a') avec a' réellement joué (non max) |
 | **Monte Carlo** | On-policy, tabulaire | `montecarlo.py` | Attend la fin d'un épisode, retour exact G |
 | **Deep Q-Network** | Off-policy, réseau de neurones | `dqn.py` | MLP NumPy, experience replay, target network |
 
@@ -76,7 +77,7 @@ La GUI s'ouvre directement. Toutes les fonctionnalités sont accessibles depuis 
 
 ### Panneau gauche — Configuration
 
-**Algorithme** : choisir entre Q-Learning, Monte Carlo ou Deep Q-Network.
+**Algorithme** : choisir entre Q-Learning, SARSA, Monte Carlo ou Deep Q-Network.
 
 **Mode** :
 - `User` — vous choisissez tous les hyperparamètres manuellement
@@ -106,6 +107,7 @@ La GUI s'ouvre directement. Toutes les fonctionnalités sont accessibles depuis 
 
 Après l'entraînement, cliquer sur un des boutons de visualisation pour animer un épisode complet :
 - `👁 Regarder épisode (Q-Learning)` — agent Q-Learning entraîné
+- `🔄 Regarder épisode (SARSA)` — agent SARSA entraîné
 - `🎲 Regarder épisode (Monte Carlo)` — agent Monte Carlo entraîné
 - `🧠 Regarder épisode (Deep Q-Network)` — agent DQN entraîné
 - `🎲 Regarder épisode (Brute-Force)` — agent aléatoire (disponible immédiatement)
@@ -153,6 +155,7 @@ T-AIA-902-Taxi-Driver/
 │   ├── environment.py      # Wrapper Gymnasium Taxi-v3
 │   ├── bruteforce.py       # Agent aléatoire (baseline)
 │   ├── qlearning.py        # Agent Q-Learning tabulaire
+│   ├── sarsa.py            # Agent SARSA (on-policy TD)
 │   ├── montecarlo.py       # Agent Monte Carlo first-visit
 │   ├── dqn.py              # Agent Deep Q-Network (NumPy)
 │   ├── benchmark.py        # Grid search et comparaisons
@@ -180,13 +183,14 @@ T-AIA-902-Taxi-Driver/
 
 ## Comparaison des algorithmes
 
-| | Brute-Force | Q-Learning | Monte Carlo | DQN |
-|---|---|---|---|---|
-| **Apprentissage** | Aucun | Mis à jour à chaque step | Mis à jour en fin d'épisode | Réseau de neurones |
-| **Stockage** | — | Q-table 500×6 | Q-table + compteurs | Poids réseau |
-| **Alpha** | — | Oui | Non (moyenne exacte) | Learning rate réseau |
-| **Biais** | — | Oui (estimation bootstrap) | Non (retour exact) | Oui |
-| **Vitesse de convergence** | — | Rapide | Plus lente | Moyenne |
+| | Brute-Force | Q-Learning | SARSA | Monte Carlo | DQN |
+|---|---|---|---|---|---|
+| **Apprentissage** | Aucun | Mis à jour à chaque step | Mis à jour à chaque step | Mis à jour en fin d'épisode | Réseau de neurones |
+| **Politique** | — | Off-policy | On-policy | On-policy | Off-policy |
+| **Stockage** | — | Q-table 500×6 | Q-table 500×6 | Q-table + compteurs | Poids réseau |
+| **Alpha** | — | Oui | Oui | Non (moyenne exacte) | Learning rate réseau |
+| **Biais** | — | Élevé (max op.) | Modéré | Faible (retour exact) | Élevé (max op.) |
+| **Vitesse de convergence** | — | Rapide | Rapide | Plus lente | Moyenne |
 
 ---
 
