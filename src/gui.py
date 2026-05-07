@@ -16,6 +16,7 @@ from bruteforce   import run_bruteforce, BruteForceAgent
 from qlearning    import train_qlearning, test_qlearning, QLearningAgent
 from montecarlo   import train_montecarlo, test_montecarlo, MonteCarloAgent
 from dqn          import train_dqn, test_dqn, DQNAgent
+from sarsa        import train_sarsa, test_sarsa, SARSAAgent
 from environment  import create_env, get_env_info
 
 # ── Palette ──────────────────────────────────────────
@@ -36,9 +37,10 @@ LOC_LABELS  = ["R", "G", "Y", "B"]
 WALLS       = [(0, 1), (1, 1), (3, 0), (4, 0), (3, 2), (4, 2)]
 
 ALGO_LABELS = {
-    "ql":  "Q-Learning",
-    "mc":  "Monte Carlo",
-    "dqn": "Deep Q-Network",
+    "ql":    "Q-Learning",
+    "sarsa": "SARSA",
+    "mc":    "Monte Carlo",
+    "dqn":   "Deep Q-Network",
 }
 
 
@@ -227,11 +229,12 @@ class TaxiGUI:
         self.root.title("Taxi Driver — RL GUI")
         self.root.configure(bg=BG)
         self.root.minsize(1280, 760)
-        self._training  = False
-        self._animating = False
-        self._ql_agent  = None
-        self._mc_agent  = None
-        self._dqn_agent = None
+        self._training    = False
+        self._animating   = False
+        self._ql_agent    = None
+        self._sarsa_agent = None
+        self._mc_agent    = None
+        self._dqn_agent   = None
         self._build_ui()
 
     # ── Layout ───────────────────────────────────────
@@ -261,7 +264,8 @@ class TaxiGUI:
         ac = self._card(left, "Algorithme")
         ac.pack(fill="x", pady=(0, 8))
         self.algo_var = tk.StringVar(value="ql")
-        for txt, val in [("📊  Q-Learning (tabulaire)",   "ql"),
+        for txt, val in [("📊  Q-Learning (off-policy)",  "ql"),
+                         ("🔄  SARSA (on-policy)",         "sarsa"),
                          ("🎲  Monte Carlo (first-visit)", "mc"),
                          ("🧠  Deep Q-Network (DQN)",      "dqn")]:
             tk.Radiobutton(
@@ -378,6 +382,14 @@ class TaxiGUI:
             command=lambda: self._watch_episode("ql"))
         self.btn_watch_ql.pack(fill="x", pady=(0, 3))
 
+        self.btn_watch_sarsa = tk.Button(
+            ctrl, text="🔄  Regarder épisode (SARSA)",
+            bg="#b45309", fg="white", activebackground="#92400e",
+            font=("Courier New", 10), relief="flat",
+            padx=8, pady=5, cursor="hand2",
+            command=lambda: self._watch_episode("sarsa"))
+        self.btn_watch_sarsa.pack(fill="x", pady=(0, 3))
+
         self.btn_watch_mc = tk.Button(
             ctrl, text="🎲  Regarder épisode (Monte Carlo)",
             bg="#7c3aed", fg="white", activebackground="#6d28d9",
@@ -472,7 +484,7 @@ class TaxiGUI:
 
     def _on_algo_change(self):
         algo = self.algo_var.get()
-        self.p_alpha.set_state(algo == "ql")
+        self.p_alpha.set_state(algo in ("ql", "sarsa"))
         if algo == "dqn":
             self._dqn_card.pack(fill="x", pady=(0, 8), before=self._ep_card)
         else:
@@ -515,12 +527,14 @@ class TaxiGUI:
     def _watch_episode(self, mode):
         if self._animating:
             return
-        agents = {"ql": self._ql_agent, "mc": self._mc_agent, "dqn": self._dqn_agent}
+        agents = {"ql": self._ql_agent, "sarsa": self._sarsa_agent,
+                  "mc": self._mc_agent, "dqn": self._dqn_agent}
         if mode in agents and agents[mode] is None:
             self.ep_stats_var.set(f"⚠  Entraîne d'abord un agent {ALGO_LABELS.get(mode, mode)} !")
             return
         self._animating = True
-        for b in (self.btn_watch_ql, self.btn_watch_mc, self.btn_watch_dqn, self.btn_watch_bf):
+        for b in (self.btn_watch_ql, self.btn_watch_sarsa, self.btn_watch_mc,
+                  self.btn_watch_dqn, self.btn_watch_bf):
             b.configure(state="disabled")
         self.ep_stats_var.set("Simulation en cours…")
         threading.Thread(target=self._animate_episode, args=(mode,), daemon=True).start()
@@ -532,6 +546,8 @@ class TaxiGUI:
 
         if mode == "ql":
             select_fn = self._ql_agent.select_best_action
+        elif mode == "sarsa":
+            select_fn = self._sarsa_agent.select_best_action
         elif mode == "mc":
             select_fn = self._mc_agent.select_best_action
         elif mode == "dqn":
@@ -560,7 +576,8 @@ class TaxiGUI:
         msg = f"{label} — {step} steps | reward: {total_reward:+.0f} | {outcome}"
         self.root.after(0, lambda m=msg: self.ep_stats_var.set(m))
         self._animating = False
-        for b in (self.btn_watch_ql, self.btn_watch_mc, self.btn_watch_dqn, self.btn_watch_bf):
+        for b in (self.btn_watch_ql, self.btn_watch_sarsa, self.btn_watch_mc,
+                  self.btn_watch_dqn, self.btn_watch_bf):
             self.root.after(0, lambda btn=b: btn.configure(state="normal"))
 
     # ── Entraînement ─────────────────────────────────
@@ -626,7 +643,7 @@ class TaxiGUI:
         self._log(f"  MODE UTILISATEUR — {ALGO_LABELS[algo]}", "header")
         for k, v in p.items():
             self._log(f"  {k:<18}: {v}")
-        if algo == "ql":
+        if algo in ("ql", "sarsa"):
             self._log(f"  {'alpha':<18}: {self.p_alpha.get()}")
         elif algo == "dqn":
             self._log(f"  {'learning_rate':<18}: {self.p_lr.get()}")
@@ -647,6 +664,10 @@ class TaxiGUI:
             agent, history = train_qlearning(n_train, alpha=self.p_alpha.get(), **p, verbose=False)
             self._ql_agent = agent
             result = test_qlearning(agent, n_test, verbose=False)
+        elif algo == "sarsa":
+            agent, history = train_sarsa(n_train, alpha=self.p_alpha.get(), **p, verbose=False)
+            self._sarsa_agent = agent
+            result = test_sarsa(agent, n_test, verbose=False)
         elif algo == "mc":
             agent, history = train_montecarlo(n_train, **p, verbose=False)
             self._mc_agent = agent
@@ -686,6 +707,8 @@ class TaxiGUI:
 
         if algo == "ql":
             agent = QLearningAgent(n_states, n_actions, alpha=self.p_alpha.get(), **p)
+        elif algo == "sarsa":
+            agent = SARSAAgent(n_states, n_actions, alpha=self.p_alpha.get(), **p)
         elif algo == "mc":
             agent = MonteCarloAgent(n_states, n_actions, **p)
         else:
@@ -701,13 +724,21 @@ class TaxiGUI:
             episode_hist = []
             total_reward, steps = 0, 0
 
+            # SARSA : on choisit a₀ avant la boucle
+            action = agent.select_action(state) if algo == "sarsa" else None
+
             for _ in range(200):
-                action = agent.select_action(state)
+                if algo != "sarsa":
+                    action = agent.select_action(state)
                 next_s, reward, terminated, truncated, _ = env.step(action)
                 done = terminated or truncated
 
                 if algo == "ql":
                     agent.learn(state, action, reward, next_s)
+                elif algo == "sarsa":
+                    next_action = agent.select_action(next_s)
+                    agent.learn(state, action, reward, next_s, next_action)
+                    action = next_action
                 elif algo == "mc":
                     episode_hist.append((state, action, reward))
                 else:
@@ -737,6 +768,9 @@ class TaxiGUI:
         if algo == "ql":
             self._ql_agent = agent
             result = test_qlearning(agent, n_test, verbose=False)
+        elif algo == "sarsa":
+            self._sarsa_agent = agent
+            result = test_sarsa(agent, n_test, verbose=False)
         elif algo == "mc":
             self._mc_agent = agent
             result = test_montecarlo(agent, n_test, verbose=False)
